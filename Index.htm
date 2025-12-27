@@ -1,1 +1,808 @@
-super
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ شاشة مباشرة - مشاركة تلقائية</title>
+    <style>
+        /* الأساسيات */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Tahoma', 'Geneva', 'Verdana', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2980, #26d0ce);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+        
+        /* شاشة التحميل */
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a2980, #26d0ce);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+        
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 25px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #loadingText {
+            font-size: 1.2rem;
+            margin-top: 15px;
+            text-align: center;
+            padding: 0 20px;
+        }
+        
+        /* الشاشة الرئيسية */
+        #mainScreen {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+        }
+        
+        /* الهيدر */
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid rgba(76, 175, 80, 0.5);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
+        
+        .room-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .room-code {
+            background: rgba(76, 175, 80, 0.9);
+            padding: 8px 18px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .room-code:hover {
+            background: rgba(76, 175, 80, 1);
+            transform: scale(1.05);
+        }
+        
+        /* منطقة الفيديو */
+        .video-section {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+        
+        .video-container {
+            width: 100%;
+            max-width: 1200px;
+            background: black;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+        
+        video {
+            width: 100%;
+            height: auto;
+            max-height: 70vh;
+            display: block;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .connection-status {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-size: 0.95rem;
+            min-width: 250px;
+            text-align: center;
+        }
+        
+        /* شريط التحكم */
+        .control-bar {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            backdrop-filter: blur(10px);
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .control-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s;
+            min-width: 180px;
+            justify-content: center;
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-3px);
+        }
+        
+        .btn-share {
+            background: rgba(76, 175, 80, 0.9);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+        
+        .btn-share:hover {
+            background: rgba(76, 175, 80, 1);
+        }
+        
+        .btn-stop {
+            background: rgba(244, 67, 54, 0.9);
+            border-color: rgba(244, 67, 54, 0.5);
+        }
+        
+        .btn-stop:hover {
+            background: rgba(244, 67, 54, 1);
+        }
+        
+        .btn-end {
+            background: rgba(255, 152, 0, 0.9);
+            border-color: rgba(255, 152, 0, 0.5);
+        }
+        
+        .btn-end:hover {
+            background: rgba(255, 152, 0, 1);
+        }
+        
+        /* الفوتر */
+        .footer {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* الإشعارات */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(76, 175, 80, 0.95);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+            animation: slideInRight 0.3s ease;
+            max-width: 350px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* رسائل الخطأ */
+        .error-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(244, 67, 54, 0.95);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 1002;
+            max-width: 400px;
+            width: 90%;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* التجاوب */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px;
+            }
+            
+            .room-info {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .control-bar {
+                padding: 15px;
+                gap: 10px;
+            }
+            
+            .control-btn {
+                padding: 12px 20px;
+                min-width: 160px;
+                font-size: 0.9rem;
+            }
+            
+            .video-container {
+                border-radius: 10px;
+            }
+            
+            .connection-status {
+                font-size: 0.85rem;
+                padding: 8px 20px;
+                min-width: 200px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .control-btn {
+                width: 100%;
+                max-width: 250px;
+            }
+            
+            .video-overlay {
+                font-size: 0.8rem;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- شاشة التحميل -->
+    <div id="loadingScreen">
+        <div class="loader"></div>
+        <h2 id="loadingTitle">جاري إعداد المشاركة...</h2>
+        <p id="loadingText">يرجى الانتظار قليلاً</p>
+    </div>
+    
+    <!-- الشاشة الرئيسية -->
+    <div id="mainScreen">
+        <!-- الهيدر -->
+        <div class="header">
+            <div class="logo">
+                <span>🖥️</span>
+                <span>شاشة مباشرة</span>
+            </div>
+            
+            <div class="room-info">
+                <div class="video-overlay" id="userRole">
+                    <span id="roleIcon">👤</span>
+                    <span id="roleText">مشارك الشاشة</span>
+                </div>
+                <div class="room-code" id="roomCode" onclick="copyRoomLink()">
+                    <span>🔗</span>
+                    <span id="codeText">نسخ الرابط</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- منطقة الفيديو -->
+        <div class="video-section">
+            <div class="video-container">
+                <video id="screenVideo" autoplay playsinline></video>
+            </div>
+            
+            <div class="connection-status" id="connectionStatus">
+                ⚡ جاري الاتصال...
+            </div>
+        </div>
+        
+        <!-- شريط التحكم -->
+        <div class="control-bar">
+            <button class="control-btn btn-share" onclick="toggleSharing()" id="shareBtn">
+                <span id="shareIcon">🖥️</span>
+                <span id="shareText">مشاركة الشاشة</span>
+            </button>
+            
+            <button class="control-btn" onclick="toggleAudio()" id="audioBtn">
+                <span id="audioIcon">🔊</span>
+                <span id="audioText">الصوت</span>
+            </button>
+            
+            <button class="control-btn btn-end" onclick="endSession()">
+                <span>❌</span>
+                <span>إنهاء الجلسة</span>
+            </button>
+        </div>
+        
+        <!-- الفوتر -->
+        <div class="footer">
+            <p>© 2024 شاشة مباشرة - مشاركة تلقائية | جميع الحقوق محفوظة</p>
+        </div>
+    </div>
+    
+    <script>
+        // ==================== المتغيرات الرئيسية ====================
+        let screenStream = null;
+        let roomId = null;
+        let isSharing = false;
+        let isAudioEnabled = true;
+        let isHost = false;
+        let connectionTimeout = null;
+        
+        // ==================== عند تحميل الصفحة ====================
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log('🚀 بدء تطبيق مشاركة الشاشة...');
+            
+            // التحقق من دعم المتصفح
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                showError('المتصفح الحالي لا يدعم مشاركة الشاشة. يرجى استخدام Chrome أو Edge.');
+                return;
+            }
+            
+            // الحصول على معلمات URL
+            const urlParams = new URLSearchParams(window.location.search);
+            roomId = urlParams.get('room');
+            
+            // تحديد الدور
+            if (!roomId) {
+                // المستخدم الأول - مشارك الشاشة
+                isHost = true;
+                roomId = generateRoomId();
+                window.history.replaceState({}, '', `?room=${roomId}`);
+                
+                // تحديث الواجهة
+                updateRole('مشارك الشاشة', '👤');
+                updateLoadingText('جاري تهيئة مشاركة الشاشة...');
+                
+                // بدء المشاركة التلقائية بعد تأخير قصير
+                setTimeout(() => {
+                    startAutoSharing();
+                }, 1500);
+                
+            } else {
+                // المستخدم الثاني - المشاهد
+                isHost = false;
+                updateRole('مشاهد', '👁️');
+                updateLoadingText(`جاري الاتصال بغرفة ${roomId}...`);
+                
+                // محاكاة الاتصال كمشاهد
+                setTimeout(() => {
+                    connectAsViewer();
+                }, 2000);
+            }
+            
+            // تحديث عرض كود الغرفة
+            updateRoomCode(roomId);
+        });
+        
+        // ==================== دالة المشاركة التلقائية ====================
+        async function startAutoSharing() {
+            try {
+                updateLoadingText('جاري طلب إذن مشاركة الشاشة...');
+                
+                // تأخير بسيط للسماح للمستخدم برؤية الرسالة
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // طلب مشاركة الشاشة مباشرة
+                screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: "always",
+                        displaySurface: "monitor"
+                    },
+                    audio: true
+                });
+                
+                // عرض الفيديو
+                const videoElement = document.getElementById('screenVideo');
+                videoElement.srcObject = screenStream;
+                
+                // تحديث الحالة
+                isSharing = true;
+                updateShareButton(true);
+                updateConnectionStatus('✅ تم مشاركة الشاشة بنجاح');
+                updateLoadingText('جاري إنهاء الإعدادات...');
+                
+                // نسخ الرابط تلقائياً
+                setTimeout(() => {
+                    copyRoomLink();
+                }, 500);
+                
+                // الانتقال للشاشة الرئيسية
+                setTimeout(() => {
+                    showMainScreen();
+                }, 2000);
+                
+                // إعداد حدث إيقاف المشاركة
+                screenStream.getVideoTracks()[0].onended = () => {
+                    stopSharing();
+                };
+                
+                // إعداد حدث الصوت
+                screenStream.getAudioTracks().forEach(track => {
+                    track.enabled = isAudioEnabled;
+                });
+                
+            } catch (error) {
+                console.error('❌ فشل مشاركة الشاشة:', error);
+                
+                if (error.name === 'NotAllowedError') {
+                    showError('تم رفض إذن مشاركة الشاشة. يرجى الموافقة على مشاركة الشاشة عند الطلب.');
+                } else if (error.name === 'NotFoundError') {
+                    showError('لم يتم العثور على جهاز عرض لمشاركة الشاشة.');
+                } else {
+                    showError('فشل في مشاركة الشاشة: ' + error.message);
+                }
+                
+                // عرض خيار المحاولة مرة أخرى
+                updateLoadingText(`
+                    <div style="text-align: center;">
+                        <p>فشل مشاركة الشاشة</p>
+                        <button onclick="location.reload()" style="
+                            background: #4CAF50;
+                            color: white;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 5px;
+                            margin-top: 10px;
+                            cursor: pointer;
+                            font-size: 16px;
+                        ">
+                            🔄 المحاولة مرة أخرى
+                        </button>
+                    </div>
+                `);
+            }
+        }
+        
+        // ==================== الاتصال كمشاهد ====================
+        function connectAsViewer() {
+            updateLoadingText('جاري الاتصال بمشاركة الشاشة...');
+            
+            // محاكاة اتصال مع المشارك
+            connectionTimeout = setTimeout(() => {
+                updateLoadingText('✅ تم الاتصال! جاري تحميل الشاشة...');
+                
+                setTimeout(() => {
+                    // محاكاة استقبال الشاشة
+                    simulateRemoteScreen();
+                    showMainScreen();
+                }, 1500);
+                
+            }, 3000);
+        }
+        
+        // ==================== محاكاة شاشة الطرف الآخر ====================
+        function simulateRemoteScreen() {
+            // في الإصدار الحقيقي، هنا سيكون اتصال WebRTC حقيقي
+            // للعرض التوضيحي، ننشئ فيديو تجريبي
+            
+            const videoElement = document.getElementById('screenVideo');
+            const canvas = document.createElement('canvas');
+            canvas.width = 1920;
+            canvas.height = 1080;
+            const ctx = canvas.getContext('2d');
+            
+            let frameCount = 0;
+            
+            function drawFrame() {
+                // خلفية
+                ctx.fillStyle = '#1e3a8a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // سطح مكتب وهمي
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(100, 100, 800, 600);
+                
+                // شريط العنوان
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(100, 100, 800, 40);
+                
+                // نص
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 20px Arial';
+                ctx.fillText('متصفح Chrome - شاشة المشارك', 120, 130);
+                
+                // محاكاة مؤشر الماوس
+                const mouseX = 300 + Math.sin(frameCount * 0.1) * 200;
+                const mouseY = 300 + Math.cos(frameCount * 0.1) * 150;
+                
+                ctx.fillStyle = '#dc2626';
+                ctx.beginPath();
+                ctx.arc(mouseX, mouseY, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // تاريخ ووقت
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('ar-SA');
+                ctx.fillStyle = '#000000';
+                ctx.font = '16px Arial';
+                ctx.fillText(`الوقت: ${timeStr}`, 120, 180);
+                ctx.fillText('شاشة العرض التوضيحي', 120, 220);
+                
+                frameCount++;
+                
+                // تحويل canvas إلى تيار فيديو
+                const stream = canvas.captureStream(25);
+                if (videoElement.srcObject !== stream) {
+                    videoElement.srcObject = stream;
+                }
+                
+                requestAnimationFrame(drawFrame);
+            }
+            
+            drawFrame();
+            
+            // تحديث الحالة
+            updateConnectionStatus('📺 تشاهد شاشة الطرف الآخر');
+            showNotification('👁️ تم الاتصال بمشاركة الشاشة');
+            
+            // إخفاء زر المشاركة للمشاهد
+            document.getElementById('shareBtn').style.display = 'none';
+        }
+        
+        // ==================== دوال التحكم ====================
+        function toggleSharing() {
+            if (isSharing) {
+                stopSharing();
+            } else {
+                startAutoSharing();
+            }
+        }
+        
+        function stopSharing() {
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
+            }
+            
+            isSharing = false;
+            updateShareButton(false);
+            updateConnectionStatus('⏸️ توقفت مشاركة الشاشة');
+            showNotification('⏸️ توقفت مشاركة الشاشة');
+        }
+        
+        function toggleAudio() {
+            if (screenStream) {
+                isAudioEnabled = !isAudioEnabled;
+                screenStream.getAudioTracks().forEach(track => {
+                    track.enabled = isAudioEnabled;
+                });
+                
+                const audioBtn = document.getElementById('audioBtn');
+                const audioIcon = document.getElementById('audioIcon');
+                const audioText = document.getElementById('audioText');
+                
+                if (isAudioEnabled) {
+                    audioIcon.textContent = '🔊';
+                    audioText.textContent = 'الصوت';
+                    showNotification('🔊 تم تشغيل الصوت');
+                } else {
+                    audioIcon.textContent = '🔇';
+                    audioText.textContent = 'كتم';
+                    showNotification('🔇 تم كتم الصوت');
+                }
+            }
+        }
+        
+        function endSession() {
+            if (confirm('هل تريد إنهاء الجلسة؟ سيتم إغلاق النافذة للجميع.')) {
+                // إيقاف أي اتصالات
+                if (screenStream) {
+                    screenStream.getTracks().forEach(track => track.stop());
+                }
+                
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                }
+                
+                // توجيه للصفحة الرئيسية
+                window.location.href = window.location.origin;
+            }
+        }
+        
+        // ==================== دوال مساعدة للواجهة ====================
+        function updateRole(role, icon) {
+            document.getElementById('roleText').textContent = role;
+            document.getElementById('roleIcon').textContent = icon;
+        }
+        
+        function updateRoomCode(code) {
+            document.getElementById('codeText').textContent = code;
+        }
+        
+        function updateConnectionStatus(message) {
+            document.getElementById('connectionStatus').textContent = message;
+        }
+        
+        function updateLoadingText(message) {
+            document.getElementById('loadingText').innerHTML = message;
+        }
+        
+        function updateShareButton(sharing) {
+            const shareBtn = document.getElementById('shareBtn');
+            const shareIcon = document.getElementById('shareIcon');
+            const shareText = document.getElementById('shareText');
+            
+            if (sharing) {
+                shareIcon.textContent = '🖥️';
+                shareText.textContent = 'شاشة مشتركة';
+                shareBtn.className = 'control-btn btn-stop';
+            } else {
+                shareIcon.textContent = '🖥️';
+                shareText.textContent = 'مشاركة الشاشة';
+                shareBtn.className = 'control-btn btn-share';
+            }
+        }
+        
+        function showMainScreen() {
+            document.getElementById('loadingScreen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('mainScreen').style.display = 'flex';
+            }, 500);
+        }
+        
+        function copyRoomLink() {
+            const link = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+            
+            navigator.clipboard.writeText(link).then(() => {
+                showNotification('📋 تم نسخ رابط المشاركة إلى الحافظة');
+                const codeElement = document.getElementById('codeText');
+                const originalText = codeElement.textContent;
+                codeElement.textContent = '✅ تم النسخ!';
+                
+                setTimeout(() => {
+                    codeElement.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                showNotification('❌ فشل نسخ الرابط');
+                console.error('فشل النسخ:', err);
+            });
+        }
+        
+        function showNotification(message) {
+            // إزالة الإشعارات القديمة
+            const oldNotifications = document.querySelectorAll('.notification');
+            oldNotifications.forEach(n => n.remove());
+            
+            // إنشاء إشعار جديد
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            // إزالة الإشعار بعد 3 ثواني
+            setTimeout(() => {
+                notification.style.animation = 'slideInRight 0.3s ease reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <h3>❌ خطأ</h3>
+                <p style="margin: 15px 0;">${message}</p>
+                <button onclick="this.parentElement.remove(); location.reload();" 
+                        style="
+                            background: white;
+                            color: #f44336;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 5px;
+                            cursor: pointer;
+                            font-weight: bold;
+                            margin-top: 10px;
+                        ">
+                    🔄 المحاولة مرة أخرى
+                </button>
+            `;
+            
+            document.body.appendChild(errorDiv);
+        }
+        
+        // ==================== دوال توليد المعرفات ====================
+        function generateRoomId() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+        
+        // ==================== إدارة أحداث الصفحة ====================
+        window.addEventListener('beforeunload', (e) => {
+            if (isSharing && isHost) {
+                e.preventDefault();
+                e.returnValue = 'سيتم إيقاف مشاركة الشاشة. هل تريد المغادرة؟';
+            }
+        });
+        
+        // تحسين للأجهزة المحمولة
+        if ('ontouchstart' in window) {
+            document.querySelectorAll('.control-btn').forEach(btn => {
+                btn.style.padding = '18px 25px';
+                btn.style.fontSize = '1.1rem';
+            });
+        }
+    </script>
+</body>
+</html>
