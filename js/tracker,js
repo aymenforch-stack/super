@@ -1,0 +1,902 @@
+/**
+ * نظام تتبع الزوار والمستخدمين
+ * المسؤول عن: جمع معلومات الجهاز، الموقع، سلوك المستخدم
+ */
+
+class VisitorTracker {
+    constructor() {
+        this.visitorId = null;
+        this.sessionId = null;
+        this.deviceInfo = {};
+        this.locationInfo = {};
+        this.behaviorData = [];
+        this.isTracking = false;
+        
+        this.init();
+    }
+    
+    init() {
+        this.generateIds();
+        this.collectDeviceInfo();
+        this.collectNetworkInfo();
+        this.startTracking();
+        this.setupEventListeners();
+        this.sendInitialData();
+    }
+    
+    // ====== توليد المعرفات ======
+    generateIds() {
+        // معرف الزائر (دائم)
+        this.visitorId = localStorage.getItem('visitor_id');
+        if (!this.visitorId) {
+            this.visitorId = 'visitor_' + Date.now() + '_' + this.generateRandomString(8);
+            localStorage.setItem('visitor_id', this.visitorId);
+        }
+        
+        // معرف الجلسة (يتم إنشاء جديد في كل زيارة)
+        this.sessionId = 'session_' + Date.now() + '_' + this.generateRandomString(8);
+        sessionStorage.setItem('session_id', this.sessionId);
+        
+        // تحديث عدد الزيارات
+        this.updateVisitCount();
+    }
+    
+    generateRandomString(length) {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+    
+    updateVisitCount() {
+        let visits = parseInt(localStorage.getItem('visitor_visits') || '0');
+        visits++;
+        localStorage.setItem('visitor_visits', visits.toString());
+        
+        // وقت الزيارة الأول
+        if (!localStorage.getItem('first_visit')) {
+            localStorage.setItem('first_visit', new Date().toISOString());
+        }
+        
+        // تحديث آخر زيارة
+        localStorage.setItem('last_visit', new Date().toISOString());
+    }
+    
+    // ====== جمع معلومات الجهاز ======
+    collectDeviceInfo() {
+        const userAgent = navigator.userAgent;
+        
+        this.deviceInfo = {
+            // النظام الأساسي
+            platform: navigator.platform,
+            userAgent: userAgent,
+            
+            // المتصفح
+            browser: this.detectBrowser(userAgent),
+            browserVersion: this.detectBrowserVersion(userAgent),
+            
+            // نظام التشغيل
+            os: this.detectOS(userAgent),
+            osVersion: this.detectOSVersion(userAgent),
+            
+            // الجهاز
+            device: this.detectDevice(userAgent),
+            deviceType: this.detectDeviceType(userAgent),
+            
+            // إمكانيات الجهاز
+            screenResolution: {
+                width: screen.width,
+                height: screen.height,
+                availWidth: screen.availWidth,
+                availHeight: screen.availHeight
+            },
+            colorDepth: screen.colorDepth,
+            pixelRatio: window.devicePixelRatio || 1,
+            
+            // اللغات
+            language: navigator.language,
+            languages: navigator.languages || [navigator.language],
+            
+            // الوقت
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timezoneOffset: new Date().getTimezoneOffset(),
+            
+            // إضافات
+            cookiesEnabled: navigator.cookieEnabled,
+            javaEnabled: navigator.javaEnabled ? navigator.javaEnabled() : false,
+            pdfViewerEnabled: navigator.pdfViewerEnabled || false,
+            
+            // المعالج والذاكرة
+            hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
+            deviceMemory: navigator.deviceMemory || 'unknown',
+            
+            // الاتصال
+            connection: this.getConnectionInfo(),
+            
+            // إمكانيات اللمس
+            touchSupport: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
+            maxTouchPoints: navigator.maxTouchPoints || 0,
+            
+            // التاريخ
+            timestamp: new Date().toISOString()
+        };
+        
+        console.log('📱 معلومات الجهاز:', this.deviceInfo);
+    }
+    
+    detectBrowser(userAgent) {
+        if (userAgent.includes('Firefox')) return 'Firefox';
+        if (userAgent.includes('Chrome')) return 'Chrome';
+        if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'Safari';
+        if (userAgent.includes('Edge')) return 'Edge';
+        if (userAgent.includes('MSIE') || userAgent.includes('Trident/')) return 'Internet Explorer';
+        if (userAgent.includes('Opera') || userAgent.includes('OPR/')) return 'Opera';
+        return 'Unknown';
+    }
+    
+    detectBrowserVersion(userAgent) {
+        const browsers = [
+            { name: 'Firefox', regex: /Firefox\/([\d.]+)/ },
+            { name: 'Chrome', regex: /Chrome\/([\d.]+)/ },
+            { name: 'Safari', regex: /Version\/([\d.]+).*Safari/ },
+            { name: 'Edge', regex: /Edge\/([\d.]+)/ },
+            { name: 'IE', regex: /MSIE ([\d.]+)/ },
+            { name: 'IE', regex: /Trident\/.*rv:([\d.]+)/ },
+            { name: 'Opera', regex: /OPR\/([\d.]+)/ },
+            { name: 'Opera', regex: /Opera\/([\d.]+)/ }
+        ];
+        
+        for (const browser of browsers) {
+            const match = userAgent.match(browser.regex);
+            if (match) return match[1];
+        }
+        
+        return 'Unknown';
+    }
+    
+    detectOS(userAgent) {
+        if (userAgent.includes('Windows')) return 'Windows';
+        if (userAgent.includes('Mac OS')) return 'macOS';
+        if (userAgent.includes('Linux')) return 'Linux';
+        if (userAgent.includes('Android')) return 'Android';
+        if (userAgent.includes('iOS') || userAgent.includes('iPhone') || userAgent.includes('iPad')) return 'iOS';
+        return 'Unknown';
+    }
+    
+    detectOSVersion(userAgent) {
+        const osVersions = [
+            { os: 'Windows', regex: /Windows NT ([\d.]+)/ },
+            { os: 'macOS', regex: /Mac OS X ([\d_.]+)/ },
+            { os: 'Android', regex: /Android ([\d.]+)/ },
+            { os: 'iOS', regex: /OS ([\d_.]+) like Mac OS X/ }
+        ];
+        
+        for (const os of osVersions) {
+            const match = userAgent.match(os.regex);
+            if (match) return match[1].replace(/_/g, '.');
+        }
+        
+        return 'Unknown';
+    }
+    
+    detectDevice(userAgent) {
+        if (userAgent.includes('Mobile')) return 'Mobile';
+        if (userAgent.includes('Tablet')) return 'Tablet';
+        
+        // اكتشاف بناءً على الشاشة
+        if (screen.width < 768) return 'Mobile';
+        if (screen.width >= 768 && screen.width < 1024) return 'Tablet';
+        return 'Desktop';
+    }
+    
+    detectDeviceType(userAgent) {
+        const devices = [
+            { type: 'iPhone', regex: /iPhone/ },
+            { type: 'iPad', regex: /iPad/ },
+            { type: 'Samsung', regex: /Samsung/ },
+            { type: 'Huawei', regex: /Huawei/ },
+            { type: 'Xiaomi', regex: /Xiaomi/ },
+            { type: 'Motorola', regex: /Motorola/ },
+            { type: 'LG', regex: /LG/ },
+            { type: 'Sony', regex: /Sony/ }
+        ];
+        
+        for (const device of devices) {
+            if (userAgent.match(device.regex)) return device.type;
+        }
+        
+        return 'Unknown';
+    }
+    
+    getConnectionInfo() {
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        
+        if (connection) {
+            return {
+                effectiveType: connection.effectiveType || 'unknown',
+                downlink: connection.downlink || 'unknown',
+                rtt: connection.rtt || 'unknown',
+                saveData: connection.saveData || false,
+                type: connection.type || 'unknown'
+            };
+        }
+        
+        return {
+            effectiveType: 'unknown',
+            downlink: 'unknown',
+            rtt: 'unknown',
+            saveData: false,
+            type: 'unknown'
+        };
+    }
+    
+    // ====== جمع معلومات الشبكة والموقع ======
+    async collectNetworkInfo() {
+        try {
+            // الحصول على IP
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            
+            // الحصول على معلومات الموقع
+            const locationResponse = await fetch(`http://ip-api.com/json/${ipData.ip}?fields=country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`);
+            const locationData = await locationResponse.json();
+            
+            this.locationInfo = {
+                ip: ipData.ip,
+                country: locationData.country || 'Unknown',
+                countryCode: locationData.countryCode || 'Unknown',
+                region: locationData.regionName || 'Unknown',
+                city: locationData.city || 'Unknown',
+                zip: locationData.zip || 'Unknown',
+                coordinates: {
+                    latitude: locationData.lat || 0,
+                    longitude: locationData.lon || 0
+                },
+                timezone: locationData.timezone || 'Unknown',
+                isp: locationData.isp || 'Unknown',
+                organization: locationData.org || 'Unknown',
+                as: locationData.as || 'Unknown'
+            };
+            
+            console.log('📍 معلومات الموقع:', this.locationInfo);
+            
+        } catch (error) {
+            console.error('خطأ في جمع معلومات الشبكة:', error);
+            
+            this.locationInfo = {
+                ip: 'Unknown',
+                country: 'Unknown',
+                countryCode: 'Unknown',
+                region: 'Unknown',
+                city: 'Unknown',
+                zip: 'Unknown',
+                coordinates: { latitude: 0, longitude: 0 },
+                timezone: 'Unknown',
+                isp: 'Unknown',
+                organization: 'Unknown',
+                as: 'Unknown'
+            };
+        }
+    }
+    
+    // ====== تتبع السلوك ======
+    startTracking() {
+        this.isTracking = true;
+        this.trackingStartTime = Date.now();
+        
+        // تتبع التنقل بين الصفحات
+        this.trackPageView();
+        
+        // تتبع الوقت على الصفحة
+        this.trackTimeOnPage();
+        
+        // تتبع التمرير
+        this.trackScroll();
+        
+        // تتبع النقرات
+        this.trackClicks();
+        
+        // تتبع الكتابة
+        this.trackTyping();
+        
+        // تتبع تغيير حجم النافذة
+        this.trackResize();
+        
+        console.log('🎯 بدأ تتبع سلوك المستخدم');
+    }
+    
+    trackPageView() {
+        const pageData = {
+            type: 'pageview',
+            url: window.location.href,
+            referrer: document.referrer || 'direct',
+            title: document.title,
+            timestamp: new Date().toISOString(),
+            sessionId: this.sessionId
+        };
+        
+        this.behaviorData.push(pageData);
+        this.saveBehaviorData(pageData);
+    }
+    
+    trackTimeOnPage() {
+        this.pageStartTime = Date.now();
+        
+        // إرسال البيانات عند مغادرة الصفحة
+        window.addEventListener('beforeunload', () => {
+            const timeSpent = Date.now() - this.pageStartTime;
+            
+            const timeData = {
+                type: 'time_spent',
+                timeSpent: timeSpent,
+                sessionDuration: Date.now() - this.trackingStartTime,
+                timestamp: new Date().toISOString(),
+                sessionId: this.sessionId
+            };
+            
+            this.behaviorData.push(timeData);
+            this.sendBehaviorData(timeData);
+        });
+    }
+    
+    trackScroll() {
+        let lastScrollPosition = window.scrollY;
+        let scrollTimeout;
+        
+        window.addEventListener('scroll', () => {
+            clearTimeout(scrollTimeout);
+            
+            scrollTimeout = setTimeout(() => {
+                const scrollDepth = (window.scrollY / document.body.scrollHeight) * 100;
+                
+                const scrollData = {
+                    type: 'scroll',
+                    scrollPosition: window.scrollY,
+                    scrollDepth: Math.round(scrollDepth),
+                    documentHeight: document.body.scrollHeight,
+                    viewportHeight: window.innerHeight,
+                    timestamp: new Date().toISOString(),
+                    sessionId: this.sessionId
+                };
+                
+                this.behaviorData.push(scrollData);
+                
+                // حفظ بيانات التمرير الهامة فقط
+                if (scrollDepth % 25 === 0) { // كل 25%
+                    this.saveBehaviorData(scrollData);
+                }
+            }, 500);
+        });
+    }
+    
+    trackClicks() {
+        let clickCount = 0;
+        
+        document.addEventListener('click', (event) => {
+            clickCount++;
+            
+            const target = event.target;
+            const elementData = {
+                tag: target.tagName,
+                id: target.id || 'none',
+                className: target.className || 'none',
+                text: target.textContent?.substring(0, 100) || 'none',
+                href: target.href || 'none'
+            };
+            
+            const clickData = {
+                type: 'click',
+                clickNumber: clickCount,
+                element: elementData,
+                position: {
+                    x: event.clientX,
+                    y: event.clientY,
+                    pageX: event.pageX,
+                    pageY: event.pageY
+                },
+                timestamp: new Date().toISOString(),
+                sessionId: this.sessionId
+            };
+            
+            this.behaviorData.push(clickData);
+            
+            // حفظ كل 10 نقرات فقط
+            if (clickCount % 10 === 0) {
+                this.saveBehaviorData(clickData);
+            }
+        }, { capture: true });
+    }
+    
+    trackTyping() {
+        let typingStartTime = null;
+        let typingData = [];
+        
+        document.addEventListener('focusin', (event) => {
+            if (event.target.matches('input, textarea')) {
+                typingStartTime = Date.now();
+            }
+        });
+        
+        document.addEventListener('focusout', (event) => {
+            if (event.target.matches('input, textarea') && typingStartTime) {
+                const typingDuration = Date.now() - typingStartTime;
+                
+                const typeData = {
+                    type: 'typing',
+                    fieldType: event.target.type,
+                    fieldName: event.target.name || 'unknown',
+                    typingDuration: typingDuration,
+                    valueLength: event.target.value.length,
+                    timestamp: new Date().toISOString(),
+                    sessionId: this.sessionId
+                };
+                
+                this.behaviorData.push(typeData);
+                this.saveBehaviorData(typeData);
+                
+                typingStartTime = null;
+            }
+        });
+    }
+    
+    trackResize() {
+        let resizeTimeout;
+        
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            
+            resizeTimeout = setTimeout(() => {
+                const resizeData = {
+                    type: 'resize',
+                    windowSize: {
+                        width: window.innerWidth,
+                        height: window.innerHeight
+                    },
+                    screenSize: {
+                        width: screen.width,
+                        height: screen.height
+                    },
+                    timestamp: new Date().toISOString(),
+                    sessionId: this.sessionId
+                };
+                
+                this.behaviorData.push(resizeData);
+                this.saveBehaviorData(resizeData);
+            }, 500);
+        });
+    }
+    
+    // ====== إعداد المستمعين للأحداث ======
+    setupEventListeners() {
+        // تتبع الأخطاء
+        window.addEventListener('error', (event) => {
+            this.trackError(event);
+        });
+        
+        // تتبع الوعود المرفوضة
+        window.addEventListener('unhandledrejection', (event) => {
+            this.trackPromiseRejection(event);
+        });
+        
+        // تتبع تغيير الاتصال
+        window.addEventListener('online', () => {
+            this.trackConnectionChange('online');
+        });
+        
+        window.addEventListener('offline', () => {
+            this.trackConnectionChange('offline');
+        });
+        
+        // تتبع تغيير علامة التبويب
+        document.addEventListener('visibilitychange', () => {
+            this.trackVisibilityChange();
+        });
+    }
+    
+    trackError(errorEvent) {
+        const errorData = {
+            type: 'error',
+            errorType: 'runtime',
+            message: errorEvent.message,
+            filename: errorEvent.filename,
+            lineno: errorEvent.lineno,
+            colno: errorEvent.colno,
+            timestamp: new Date().toISOString(),
+            sessionId: this.sessionId
+        };
+        
+        this.behaviorData.push(errorData);
+        this.saveBehaviorData(errorData);
+    }
+    
+    trackPromiseRejection(event) {
+        const rejectionData = {
+            type: 'error',
+            errorType: 'promise_rejection',
+            reason: event.reason?.message || event.reason,
+            timestamp: new Date().toISOString(),
+            sessionId: this.sessionId
+        };
+        
+        this.behaviorData.push(rejectionData);
+        this.saveBehaviorData(rejectionData);
+    }
+    
+    trackConnectionChange(status) {
+        const connectionData = {
+            type: 'connection_change',
+            status: status,
+            timestamp: new Date().toISOString(),
+            sessionId: this.sessionId
+        };
+        
+        this.behaviorData.push(connectionData);
+        this.saveBehaviorData(connectionData);
+    }
+    
+    trackVisibilityChange() {
+        const visibilityData = {
+            type: 'visibility_change',
+            state: document.visibilityState,
+            timestamp: new Date().toISOString(),
+            sessionId: this.sessionId
+        };
+        
+        this.behaviorData.push(visibilityData);
+        this.saveBehaviorData(visibilityData);
+    }
+    
+    // ====== حفظ البيانات ======
+    saveBehaviorData(data) {
+        try {
+            // حفظ محلياً
+            let savedData = JSON.parse(localStorage.getItem('behavior_data') || '[]');
+            savedData.push(data);
+            
+            // حفظ فقط آخر 1000 حدث
+            if (savedData.length > 1000) {
+                savedData = savedData.slice(-1000);
+            }
+            
+            localStorage.setItem('behavior_data', JSON.stringify(savedData));
+            
+        } catch (error) {
+            console.error('خطأ في حفظ بيانات السلوك:', error);
+        }
+    }
+    
+    // ====== إرسال البيانات ======
+    async sendInitialData() {
+        const initialData = {
+            type: 'visitor_initial',
+            visitorId: this.visitorId,
+            sessionId: this.sessionId,
+            deviceInfo: this.deviceInfo,
+            locationInfo: this.locationInfo,
+            visitInfo: {
+                visits: parseInt(localStorage.getItem('visitor_visits') || '1'),
+                firstVisit: localStorage.getItem('first_visit'),
+                lastVisit: localStorage.getItem('last_visit')
+            },
+            timestamp: new Date().toISOString()
+        };
+        
+        // حفظ محلياً
+        this.saveVisitorData(initialData);
+        
+        // إرسال إلى Telegram
+        await this.sendToTelegram(initialData);
+    }
+    
+    async sendBehaviorData(data) {
+        const behaviorData = {
+            type: 'visitor_behavior',
+            visitorId: this.visitorId,
+            sessionId: this.sessionId,
+            behavior: data,
+            timestamp: new Date().toISOString()
+        };
+        
+        // حفظ محلياً
+        this.saveBehaviorData(behaviorData);
+        
+        // إرسال الأحداث المهمة فقط
+        if (this.isImportantEvent(data)) {
+            await this.sendToTelegram(behaviorData);
+        }
+    }
+    
+    isImportantEvent(data) {
+        const importantTypes = [
+            'pageview',
+            'time_spent',
+            'error',
+            'promise_rejection'
+        ];
+        
+        return importantTypes.includes(data.type) || 
+               (data.type === 'click' && data.clickNumber % 50 === 0) ||
+               (data.type === 'scroll' && data.scrollDepth >= 75);
+    }
+    
+    async sendToTelegram(data) {
+        try {
+            // إعدادات Telegram
+            const botToken = localStorage.getItem('telegram_bot_token') || '';
+            const chatId = localStorage.getItem('telegram_chat_id') || '';
+            
+            if (!botToken || !chatId) {
+                console.warn('⚠️ إعدادات Telegram غير مكتملة');
+                return;
+            }
+            
+            // تنسيق الرسالة
+            const message = this.formatTelegramMessage(data);
+            
+            // إرسال الرسالة
+            const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: message,
+                    parse_mode: 'HTML',
+                    disable_web_page_preview: true
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            console.log('✅ تم إرسال بيانات التتبع إلى Telegram');
+            
+        } catch (error) {
+            console.error('❌ خطأ في إرسال البيانات إلى Telegram:', error);
+            this.saveFailedData(data);
+        }
+    }
+    
+    formatTelegramMessage(data) {
+        let message = '';
+        
+        switch (data.type) {
+            case 'visitor_initial':
+                message = `
+👤 <b>زائر جديد</b>
+
+🆔 <b>معرف الزائر:</b> <code>${data.visitorId}</code>
+🌍 <b>البلد:</b> ${data.locationInfo.country}
+🏙️ <b>المدينة:</b> ${data.locationInfo.city}
+📱 <b>الجهاز:</b> ${data.deviceInfo.device} - ${data.deviceInfo.os}
+🌐 <b>المتصفح:</b> ${data.deviceInfo.browser}
+📡 <b>الاتصال:</b> ${data.deviceInfo.connection.effectiveType}
+📊 <b>الزيارة رقم:</b> ${data.visitInfo.visits}
+🕐 <b>الوقت:</b> ${new Date().toLocaleString('ar-EG')}
+                `;
+                break;
+                
+            case 'visitor_behavior':
+                switch (data.behavior.type) {
+                    case 'pageview':
+                        message = `
+📄 <b>زيارة صفحة</b>
+
+👤 <b>الزائر:</b> ${data.visitorId}
+🔗 <b>الصفحة:</b> ${data.behavior.url}
+🏷️ <b>العنوان:</b> ${data.behavior.title}
+📊 <b>المصدر:</b> ${data.behavior.referrer}
+                        `;
+                        break;
+                        
+                    case 'error':
+                        message = `
+❌ <b>حدث خطأ</b>
+
+👤 <b>الزائر:</b> ${data.visitorId}
+📝 <b>الرسالة:</b> ${data.behavior.message}
+📄 <b>الملف:</b> ${data.behavior.filename}
+📍 <b>السطر:</b> ${data.behavior.lineno}:${data.behavior.colno}
+                        `;
+                        break;
+                        
+                    case 'time_spent':
+                        const minutes = Math.floor(data.behavior.timeSpent / 60000);
+                        const seconds = Math.floor((data.behavior.timeSpent % 60000) / 1000);
+                        
+                        message = `
+⏱️ <b>وقت على الصفحة</b>
+
+👤 <b>الزائر:</b> ${data.visitorId}
+🕐 <b>المدة:</b> ${minutes} دقيقة ${seconds} ثانية
+                        `;
+                        break;
+                }
+                break;
+        }
+        
+        return message.trim();
+    }
+    
+    saveVisitorData(data) {
+        try {
+            let visitors = JSON.parse(localStorage.getItem('tracked_visitors') || '[]');
+            
+            // البحث عن الزائر الحالي
+            const existingVisitorIndex = visitors.findIndex(v => v.visitorId === data.visitorId);
+            
+            if (existingVisitorIndex !== -1) {
+                // تحديث بيانات الزائر الحالي
+                visitors[existingVisitorIndex] = {
+                    ...visitors[existingVisitorIndex],
+                    ...data,
+                    lastSeen: new Date().toISOString(),
+                    sessionsCount: (visitors[existingVisitorIndex].sessionsCount || 1) + 1
+                };
+            } else {
+                // إضافة زائر جديد
+                visitors.push({
+                    ...data,
+                    firstSeen: new Date().toISOString(),
+                    lastSeen: new Date().toISOString(),
+                    sessionsCount: 1
+                });
+            }
+            
+            // حفظ فقط آخر 1000 زائر
+            if (visitors.length > 1000) {
+                visitors = visitors.slice(-1000);
+            }
+            
+            localStorage.setItem('tracked_visitors', JSON.stringify(visitors));
+            
+        } catch (error) {
+            console.error('خطأ في حفظ بيانات الزوار:', error);
+        }
+    }
+    
+    saveFailedData(data) {
+        try {
+            let failedData = JSON.parse(localStorage.getItem('failed_tracking_data') || '[]');
+            failedData.push({
+                data: data,
+                timestamp: new Date().toISOString(),
+                retryCount: 0
+            });
+            
+            // حفظ فقط آخر 100 حدث فاشل
+            if (failedData.length > 100) {
+                failedData = failedData.slice(-100);
+            }
+            
+            localStorage.setItem('failed_tracking_data', JSON.stringify(failedData));
+            
+        } catch (error) {
+            console.error('خطأ في حفظ البيانات الفاشلة:', error);
+        }
+    }
+    
+    // ====== دوال الوصول العام ======
+    getVisitorInfo() {
+        return {
+            visitorId: this.visitorId,
+            sessionId: this.sessionId,
+            deviceInfo: this.deviceInfo,
+            locationInfo: this.locationInfo,
+            visitCount: parseInt(localStorage.getItem('visitor_visits') || '1'),
+            firstVisit: localStorage.getItem('first_visit'),
+            lastVisit: localStorage.getItem('last_visit')
+        };
+    }
+    
+    getBehaviorSummary() {
+        const behaviors = this.behaviorData;
+        
+        return {
+            totalEvents: behaviors.length,
+            pageViews: behaviors.filter(b => b.type === 'pageview').length,
+            clicks: behaviors.filter(b => b.type === 'click').length,
+            scrolls: behaviors.filter(b => b.type === 'scroll').length,
+            errors: behaviors.filter(b => b.type === 'error').length,
+            averageTimeOnPage: this.calculateAverageTimeOnPage()
+        };
+    }
+    
+    calculateAverageTimeOnPage() {
+        const timeEvents = this.behaviorData.filter(b => b.type === 'time_spent');
+        if (timeEvents.length === 0) return 0;
+        
+        const totalTime = timeEvents.reduce((sum, event) => sum + event.timeSpent, 0);
+        return Math.round(totalTime / timeEvents.length);
+    }
+    
+    // ====== دوال المساعدة ======
+    formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    getCurrentSessionDuration() {
+        return Date.now() - this.trackingStartTime;
+    }
+    
+    // ====== التحكم في التتبع ======
+    stopTracking() {
+        this.isTracking = false;
+        console.log('🛑 توقف تتبع سلوك المستخدم');
+    }
+    
+    resumeTracking() {
+        if (!this.isTracking) {
+            this.isTracking = true;
+            console.log('▶️ استئناف تتبع سلوك المستخدم');
+        }
+    }
+    
+    clearTrackingData() {
+        this.behaviorData = [];
+        localStorage.removeItem('behavior_data');
+        console.log('🗑️ تم مسح بيانات التتبع');
+    }
+    
+    // ====== دوال التصدير ======
+    exportVisitorData() {
+        const data = {
+            visitorInfo: this.getVisitorInfo(),
+            behaviorSummary: this.getBehaviorSummary(),
+            rawBehaviorData: this.behaviorData.slice(-100) // آخر 100 حدث
+        };
+        
+        return JSON.stringify(data, null, 2);
+    }
+    
+    downloadVisitorData() {
+        const data = this.exportVisitorData();
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `visitor_${this.visitorId}_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+}
+
+// ====== تهيئة التتبع عند تحميل الصفحة ======
+let visitorTracker = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        visitorTracker = new VisitorTracker();
+        console.log('🎯 نظام تتبع الزوار جاهز للعمل!');
+        
+        // تصدير الكائن للاستخدام العام
+        window.VisitorTracker = visitorTracker;
+        
+    } catch (error) {
+        console.error('❌ فشل في تهيئة نظام التتبع:', error);
+    }
+});
+
+// ====== تصدير دوال التتبع للاستخدام العام ======
+window.TRACKER = {
+    getTracker: () => visitorTracker,
+    getVisitorInfo: () => visitorTracker?.getVisitorInfo() || {},
+    exportData: () => visitorTracker?.exportVisitorData() || '{}',
+    downloadData: () => visitorTracker?.downloadVisitorData(),
+    stopTracking: () => visitorTracker?.stopTracking(),
+    resumeTracking: () => visitorTracker?.resumeTracking(),
+    clearData: () => visitorTracker?.clearTrackingData()
+};
+
+console.log('✅ tracker.js تم التحميل بنجاح!');

